@@ -2,7 +2,7 @@
 """
 Created on Thu Jun 25 23:11:27 2020
 
-@author: WAP@qqqqqqqqqqqqqqqqqqqqqqqqqqqq
+@author: WAP@qq.com
 """
 
 import myjqcfg as cfg
