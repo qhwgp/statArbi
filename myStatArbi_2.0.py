@@ -59,7 +59,42 @@ def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay= 5):
     pqdata['dBOLL']= statInfo[1]- statInfo[2]
     pqdata.plot(title='BOLL Line',fontsize= 20, figsize=(40,30)).get_figure().savefig('fig.png')
     return
+   
+def checkTrade(row, statInfo, tradeThreshold , positionThreshold, levelThreshold, position):
+    midPoint= statInfo[1]- position* statInfo[2]
+    #wap edit
+    if row['lesf']< midPoint- tradeThreshold* statInfo[1] and position< positionThreshold:
+        return 'buy'
+    elif row['self']> midPoint+ tradeThreshold* statInfo[1] and position> -positionThreshold:
+        return 'sell'
+    else:
+        return 'hold'   
     
+def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold , positionThreshold, levelThreshold, nTradeSilence, position= [0, 0]):
+    tradeData =pd.DataFrame(columns=('time', 'jqID', 'type', 'volume', 'price'))
+    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
+    pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
+    
+    tradeSignal= 'hold'
+    for time, row in pqdata.iterrows():
+        #check if near trade
+        if nNearTrade> 0.1:
+            nNearTrade-= 1
+        elif tradeSignal!= 'hold':#check tradeSignal
+            nNearTrade= nTradeSilence
+            if tradeSignal== 'buy':
+                tradeData= tradeData.append({'time': time, 'market': 'etf', 'volume': runParams[2], 'price': row['askp']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'market': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
+                position+= 1
+            elif tradeSignal== 'sell':
+                tradeData= tradeData.append({'time': time, 'market': 'etf', 'volume': -runParams[2], 'price': row['bidp']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'market': 'future', 'volume': 1, 'price': row['fa1_p']}, ignore_index=True)
+                position-= 1
+            tradeSignal= 'hold'
+        else:#check trade
+            tradeSignal= checkTrade(row, runParams, tradeThreshold , positionThreshold, position)
+
+    return tradeData
 
 if __name__ == '__main__':
     t0 = ti.time()
@@ -73,6 +108,7 @@ if __name__ == '__main__':
     nTestDay= 3
     tradeThreshold= 1
     positionThreshold= 10
+    levelThreshold= 5
     nTradeSilence= 10
     nParamDay= 5
     
