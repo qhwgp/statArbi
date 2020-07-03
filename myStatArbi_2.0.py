@@ -60,21 +60,29 @@ def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay= 5):
     pqdata.plot(title='BOLL Line',fontsize= 20, figsize=(40,30)).get_figure().savefig('fig.png')
     return
    
-def checkTrade(row, statInfo, tradeThreshold , positionThreshold, levelThreshold, position):
-    midPoint= statInfo[1]- position* statInfo[2]
-    #wap edit
-    if row['lesf']< midPoint- tradeThreshold* statInfo[1] and position< positionThreshold:
+def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position):
+    level= position/ positionThreshold
+    if row['lesf']< statInfo[1]- np.ceil(level+ 0.0001)* tradeThreshold* statInfo[2] and position< positionThreshold* levelThreshold:
         return 'buy'
-    elif row['self']> midPoint+ tradeThreshold* statInfo[1] and position> -positionThreshold:
+    elif row['self']> statInfo[1]+ np.ceil(-level+ 0.0001)* tradeThreshold* statInfo[2] and position> -positionThreshold* levelThreshold:
         return 'sell'
     else:
         return 'hold'   
     
-def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold , positionThreshold, levelThreshold, nTradeSilence, position= [0, 0]):
-    tradeData =pd.DataFrame(columns=('time', 'jqID', 'type', 'volume', 'price'))
+def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
+            levelThreshold, nTradeSilence, iniPosition= [0, 0]):
+    tradeData= pd.DataFrame(columns=('time', 'jqID', 'type', 'volume', 'price'))
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
-    
+    position= iniPosition[1]
+    diffETF= statInfo[0]* position- iniPosition[0]
+    if diffETF!= 0:
+        row= pqdata.iloc[0]
+        if diffETF> 0.1:
+            tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['askp']}, ignore_index=True)
+        elif diffETF< -0.1:
+            tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['bidp']}, ignore_index=True)
+    nNearTrade= 0
     tradeSignal= 'hold'
     for time, row in pqdata.iterrows():
         #check if near trade
@@ -83,16 +91,16 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
         elif tradeSignal!= 'hold':#check tradeSignal
             nNearTrade= nTradeSilence
             if tradeSignal== 'buy':
-                tradeData= tradeData.append({'time': time, 'market': 'etf', 'volume': runParams[2], 'price': row['askp']}, ignore_index=True)
-                tradeData= tradeData.append({'time': time, 'market': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': statInfo[0], 'price': row['askp']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'jqID': jqFutureID, 'type': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
                 position+= 1
             elif tradeSignal== 'sell':
-                tradeData= tradeData.append({'time': time, 'market': 'etf', 'volume': -runParams[2], 'price': row['bidp']}, ignore_index=True)
-                tradeData= tradeData.append({'time': time, 'market': 'future', 'volume': 1, 'price': row['fa1_p']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': -statInfo[0], 'price': row['bidp']}, ignore_index=True)
+                tradeData= tradeData.append({'time': time, 'jqID': jqFutureID, 'type': 'future', 'volume': 1, 'price': row['fa1_p']}, ignore_index=True)
                 position-= 1
             tradeSignal= 'hold'
         else:#check trade
-            tradeSignal= checkTrade(row, runParams, tradeThreshold , positionThreshold, position)
+            tradeSignal= checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position)
 
     return tradeData
 
@@ -106,10 +114,10 @@ if __name__ == '__main__':
     nIndex= -1
     
     nTestDay= 3
-    tradeThreshold= 1
-    positionThreshold= 10
+    tradeThreshold= 0.8
+    positionThreshold= 5
     levelThreshold= 5
-    nTradeSilence= 10
+    nTradeSilence= 3
     nParamDay= 5
     
     mdata= cfg.getMergeData(jqETFID, jqFutureID, listTradeDay[-1])
@@ -122,7 +130,8 @@ if __name__ == '__main__':
     
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[-1], statInfo[0])
     drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
-
+    tradeData= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
+            levelThreshold, nTradeSilence, [0, 0])
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
 
 

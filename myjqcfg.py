@@ -24,14 +24,14 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-jqDataPath= 'F:\\LenovoSync\\jqData'
-#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+#jqDataPath= 'F:\\LenovoSync\\jqData'
+jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 
 #trade params
 tradeThreshold= 1
 positionThreshold= 10
 levelThreshold= 5
-nTradeSilence= 10
+nTradeSilence= 3
 nParamDay= 5
 
 def getFutureMultiply(jqFutureID):
