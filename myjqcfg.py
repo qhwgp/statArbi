@@ -24,8 +24,8 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-#jqDataPath= 'F:\\LenovoSync\\jqData'
-jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+jqDataPath= 'F:\\LenovoSync\\jqData'
+#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 
 #trade params
 tradeThreshold= 1
@@ -44,9 +44,9 @@ def getFutureMultiply(jqFutureID):
         return 0
     
 
-def getTickData(jqID, strSDate):
+def getTickData(jqID, sdate):
     #strSDate= sdate.strftime("%Y%m%d")
-    filePath= path.join(jqDataPath,'tickData', jqID+ strSDate+ '.csv')
+    filePath= path.join(jqDataPath,'tickData', jqID+ sdate+ '.csv')
     if not path.exists(filePath):
         return None
     else:
