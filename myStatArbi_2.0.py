@@ -79,9 +79,9 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
     if diffETF!= 0:
         row= pqdata.iloc[0]
         if diffETF> 0.1:
-            tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['askp']}, ignore_index=True)
+            tradeData= tradeData.append({'time': row.name, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['askp']}, ignore_index=True)
         elif diffETF< -0.1:
-            tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['bidp']}, ignore_index=True)
+            tradeData= tradeData.append({'time': row.name, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['bidp']}, ignore_index=True)
     nNearTrade= 0
     tradeSignal= 'hold'
     for time, row in pqdata.iterrows():
