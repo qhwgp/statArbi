@@ -26,6 +26,7 @@ jqPwd= 'Hu12345678'
 
 jqDataPath= 'F:\\LenovoSync\\jqData'
 #jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+#jqDataPath= "H:\jqData"
 
 #trade params
 tradeThreshold= 1

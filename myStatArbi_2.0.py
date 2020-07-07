@@ -70,18 +70,22 @@ def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold,
         return 'hold'   
     
 def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, iniPosition= [0, 0]):
-    tradeData= pd.DataFrame(columns=('time', 'jqID', 'type', 'volume', 'price'))
+            levelThreshold, nTradeSilence, iniPosition= pd.DataFrame(columns=('volume', 'price'))):
+    pdTrade= pd.DataFrame(columns=('time', 'symbol', 'type', 'volume', 'price'))
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
-    position= iniPosition[1]
-    diffETF= statInfo[0]* position- iniPosition[0]
+    if not 'future' in iniPosition.index:
+        iniPosition.loc['future', 'volume']= 0
+    if not 'etf' in iniPosition.index:
+        iniPosition.loc['etf', 'volume'] =0
+    position= iniPosition.loc['future', 'volume']
+    diffETF= statInfo[0]* position- iniPosition.loc['etf', 'volume']
     if diffETF!= 0:
         row= pqdata.iloc[0]
         if diffETF> 0.1:
-            tradeData= tradeData.append({'time': row.name, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['askp']}, ignore_index=True)
+            pdTrade= pdTrade.append({'time': row.name, 'symbol': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['askp']}, ignore_index=True)
         elif diffETF< -0.1:
-            tradeData= tradeData.append({'time': row.name, 'jqID': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['bidp']}, ignore_index=True)
+            pdTrade= pdTrade.append({'time': row.name, 'symbol': jqETFID, 'type': 'etf', 'volume': diffETF, 'price': row['bidp']}, ignore_index=True)
     nNearTrade= 0
     tradeSignal= 'hold'
     for time, row in pqdata.iterrows():
@@ -91,18 +95,25 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
         elif tradeSignal!= 'hold':#check tradeSignal
             nNearTrade= nTradeSilence
             if tradeSignal== 'buy':
-                tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': statInfo[0], 'price': row['askp']}, ignore_index=True)
-                tradeData= tradeData.append({'time': time, 'jqID': jqFutureID, 'type': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
+                pdTrade= pdTrade.append({'time': time, 'symbol': jqETFID, 'type': 'etf', 'volume': statInfo[0], 'price': row['askp']}, ignore_index=True)
+                pdTrade= pdTrade.append({'time': time, 'symbol': jqFutureID, 'type': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
                 position+= 1
             elif tradeSignal== 'sell':
-                tradeData= tradeData.append({'time': time, 'jqID': jqETFID, 'type': 'etf', 'volume': -statInfo[0], 'price': row['bidp']}, ignore_index=True)
-                tradeData= tradeData.append({'time': time, 'jqID': jqFutureID, 'type': 'future', 'volume': 1, 'price': row['fa1_p']}, ignore_index=True)
+                pdTrade= pdTrade.append({'time': time, 'symbol': jqETFID, 'type': 'etf', 'volume': -statInfo[0], 'price': row['bidp']}, ignore_index=True)
+                pdTrade= pdTrade.append({'time': time, 'symbol': jqFutureID, 'type': 'future', 'volume': 1, 'price': row['fa1_p']}, ignore_index=True)
                 position-= 1
             tradeSignal= 'hold'
         else:#check trade
             tradeSignal= checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position)
-
-    return tradeData
+         
+    pdPosition= pdTrade.groupby(['type']).agg({'volume':'sum'})
+    pdPosition['volume']= pdPosition['volume'].add(iniPosition['volume'])
+    row= pqdata.iloc[-1]
+    pdPosition.loc['etf', 'price']= (row.bidp+ row.askp) /2
+    pdPosition.loc['future', 'price']= (row.fb1_p+ row.fa1_p) /2
+    #gdata= pdTrade.groupby(['type', 'volume']).agg({'price':'mean','time':'count'})
+            
+    return pdTrade, pdPosition
 
 if __name__ == '__main__':
     t0 = ti.time()
@@ -122,7 +133,7 @@ if __name__ == '__main__':
     
     mdata= cfg.getMergeData(jqETFID, jqFutureID, listTradeDay[-1])
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)#unitETFVolumns, basisMean, basisStd
-    #pdTradeData, position, pdDTradeInfo= PairTradeStrategy(jqETFID, jqFutureID, sdate, nParamDay, tradeThreshold , positionThreshold, nTestDay)
+    #pdpdTrade, position, pdDTradeInfo= PairTradeStrategy(jqETFID, jqFutureID, sdate, nParamDay, tradeThreshold , positionThreshold, nTestDay)
     print('day: '+ listTradeDay[-1])
     print('unitETFVolumns: %d'% statInfo[0])
     print('basisMean: %d'% statInfo[1])
@@ -130,8 +141,8 @@ if __name__ == '__main__':
     
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[-1], statInfo[0])
     drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
-    tradeData= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, [0, 0])
+    pdTrade, pdPosition= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
+            levelThreshold, nTradeSilence)
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
 
 
