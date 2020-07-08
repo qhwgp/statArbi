@@ -24,8 +24,8 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-jqDataPath= 'F:\\LenovoSync\\jqData'
-#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+#jqDataPath= 'F:\\LenovoSync\\jqData'
+jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 #jqDataPath= "H:\jqData"
 
 #trade params
@@ -75,8 +75,9 @@ def getMergeData(jqETFID, jqFutureID, sdate, nDrop= 10):
         mdata= pd.read_csv(filePath, index_col= 0)
     return mdata
     
-    
-    
+def drawFigure(data, fname, ftitle, secondY):
+    filePath= path.join(jqDataPath, 'figure', fname)
+    data.plot(title= ftitle, fontsize= 20, figsize=(40,30), secondary_y= secondY).get_figure().savefig(filePath)
     
     
     

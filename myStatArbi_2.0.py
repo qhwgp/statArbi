@@ -51,13 +51,21 @@ def getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay= 5):
     basisStd= np.round( mdata['basis'].std())
     return [unitETFVolumns, basisMean, basisStd]
 
-def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay= 5):
+def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniPosition):
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
     pqdata= pqdata[['lesf', 'self']]
     pqdata['uBOLL']= statInfo[1]+ statInfo[2]
     pqdata['dBOLL']= statInfo[1]- statInfo[2]
-    pqdata.plot(title='BOLL Line',fontsize= 20, figsize=(40,30)).get_figure().savefig('fig.png')
+    pdft= pdTrade[pdTrade['type']== 'future']
+    pdft.index= pdft['time']
+    pqdata= pd.merge(pqdata, pdft['volume'], left_index=True, right_index=True, how='outer')
+    pqdata.iloc[0, 4]= iniPosition.loc['future', 'volume']
+    pqdata.fillna(0, inplace=True)
+    pqdata['position']= pqdata['volume'].cumsum()
+    pqdata.drop(['volume'], axis= 1, inplace=True)
+    fname= 'BOLL_%s_%s_%s.png'% (jqETFID, jqFutureID, listTradeDay[nIndex])
+    cfg.drawFigure(pqdata, fname, 'BOLL Line in ' + listTradeDay[nIndex], ['position'])
     return
    
 def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position):
@@ -70,7 +78,7 @@ def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold,
         return 'hold'   
     
 def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, iniPosition= pd.DataFrame(columns=('volume', 'price'))):
+            levelThreshold, nTradeSilence, iniPosition):
     pdTrade= pd.DataFrame(columns=('time', 'symbol', 'type', 'volume', 'price'))
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
@@ -130,17 +138,29 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
             
     return pdTrade, pdPosition, PL
 
+def PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionThreshold, listTradeDay, sIndex, eIndex):
+    iniPosition= pd.DataFrame(columns=('volume', 'price'))
+    for i in range(sIndex, eIndex):
+        pdTrade, pdPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
+                levelThreshold, nTradeSilence, iniPosition)
+        drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniPosition)
+        iniPosition= pdPosition
+        print('day: %s, P&L: %0.2f'% (listTradeDay[nIndex], PL))
+        listTrade.append(pdTrade)
+        listPosition.append(pdPosition)
+        listPL.append(PL)
+
 if __name__ == '__main__':
     t0 = ti.time()
     jqFutureID= 'IF2007.CCFX'
-    jqETFID= '510330.XSHG'
+    jqETFID= '510300.XSHG'
     #sdate= '20200430' 
     
     listTradeDay= cfg.getTradeDays()
     nIndex= -1
     
     nTestDay= 3
-    tradeThreshold= 0.6
+    tradeThreshold= 1
     positionThreshold= 5
     levelThreshold= 8
     nTradeSilence= 3
@@ -161,7 +181,7 @@ if __name__ == '__main__':
     print('day: %s, P&L: %0.2f'% (listTradeDay[nIndex], PL))
     
     """
-    pdPosition= pd.DataFrame(columns=('volume', 'price'))
+    iniPosition= pd.DataFrame(columns=('volume', 'price'))
     listTrade= []
     listPosition= []
     listPL= []
@@ -169,7 +189,9 @@ if __name__ == '__main__':
     for i in range(testDay):
         nIndex= i- testDay
         pdTrade, pdPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-                levelThreshold, nTradeSilence, pdPosition)
+                levelThreshold, nTradeSilence, iniPosition)
+        drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniPosition)
+        iniPosition= pdPosition
         print('day: %s, P&L: %0.2f'% (listTradeDay[nIndex], PL))
         listTrade.append(pdTrade)
         listPosition.append(pdPosition)
