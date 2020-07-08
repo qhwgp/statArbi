@@ -137,18 +137,18 @@ if __name__ == '__main__':
     #sdate= '20200430' 
     
     listTradeDay= cfg.getTradeDays()
-    nIndex= -2
+    nIndex= -1
     
     nTestDay= 3
-    tradeThreshold= 0.8
+    tradeThreshold= 0.6
     positionThreshold= 5
-    levelThreshold= 5
+    levelThreshold= 8
     nTradeSilence= 3
     nParamDay= 5
-    
+    """
     mdata= cfg.getMergeData(jqETFID, jqFutureID, listTradeDay[nIndex])
     statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)#unitETFVolumns, basisMean, basisStd
-    #pdpdTrade, position, pdDTradeInfo= PairTradeStrategy(jqETFID, jqFutureID, sdate, nParamDay, tradeThreshold , positionThreshold, nTestDay)
+
     print('day: '+ listTradeDay[nIndex])
     print('unitETFVolumns: %d'% statInfo[0])
     print('basisMean: %d'% statInfo[1])
@@ -156,12 +156,16 @@ if __name__ == '__main__':
     
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
     drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
+    pdTrade, pdnPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
+            levelThreshold, nTradeSilence)
+    print('day: %s, P&L: %0.2f'% (listTradeDay[nIndex], PL))
     
+    """
     pdPosition= pd.DataFrame(columns=('volume', 'price'))
     listTrade= []
     listPosition= []
     listPL= []
-    testDay= 10
+    testDay= 20
     for i in range(testDay):
         nIndex= i- testDay
         pdTrade, pdPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
@@ -170,12 +174,7 @@ if __name__ == '__main__':
         listTrade.append(pdTrade)
         listPosition.append(pdPosition)
         listPL.append(PL)
-    """
-    nIndex= -1
-    pdTrade, pdnPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, pdPosition)
-    print('P&L: %0.2f'% PL)
-    """
+
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
 
 
