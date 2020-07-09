@@ -139,6 +139,7 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
     return pdTrade, pdPosition, PL
 
 def PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionThreshold, listTradeDay, sIndex, eIndex):
+    pdDTradeInfo= pd.DataFrame(columns=('futurePosition', 'nintraDayTrade', 'midMean', 'midStd', 'etfOrderVolumns', 'PL'))
     iniPosition= pd.DataFrame(columns=('volume', 'price'))
     for i in range(sIndex, eIndex):
         pdTrade, pdPosition, PL= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 

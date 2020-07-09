@@ -12,6 +12,9 @@ import pandas as pd
 from os import path
 from datetime import date, datetime, timedelta
 
+def getStrToday(tback= 0):
+    return (date.today()-timedelta(days= tback)).strftime("%Y%m%d")
+
 def getStrNextDay(strDate):
     dt= datetime.strptime(strDate,'%Y%m%d')
     dt= dt+ timedelta(days=1)
@@ -70,9 +73,9 @@ if __name__ == '__main__':
             codelist.append(sym+ str(i+1).zfill(2))
     for i in range(7):
         codelist.append('IF20'+ str(i+1).zfill(2))
-    """    
-    codelist= ['510500','510300','510330','IF2007','IF2008','IF2009','IC2007','IC2008','IC2009'] 
-    edate= date.today().strftime("%Y%m%d")
+    """
+    codelist= ['510500','510300','510330','IF2007','IF2008','IF2009','IC2007','IC2008','IC2009']
+    edate= getStrToday()
     listJQID= jq.normalize_code(codelist)
     listDate= syncListTradeDay('20190101', edate)
     
