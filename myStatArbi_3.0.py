@@ -37,7 +37,7 @@ def getPairQuote(jqETFID, jqFutureID, sdate, unitETFVolumns):
     mdata['self']= mdata['bidp']*unitETFVolumns- mdata['fa1_p']* fMultiply
     return mdata
 
-def getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay, nIndex= 0):
+def getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay= 5):
     listdata= []
     for i in range(nParamDay):
         mdata= cfg.getMergeData(jqETFID, jqFutureID, listTradeDay[nIndex- 1- i])
@@ -52,7 +52,7 @@ def getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay, nIndex= 0):
     return [unitETFVolumns, basisMean, basisStd]
 
 def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniPosition):
-    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay, nIndex)
+    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay)
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
     pqdata= pqdata[['lesf', 'self']]
     pqdata['uBOLL']= statInfo[1]+ statInfo[2]
@@ -66,7 +66,6 @@ def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniP
     pqdata.drop(['volume'], axis= 1, inplace=True)
     fname= 'BOLL_%s_%s_%s.png'% (jqETFID, jqFutureID, listTradeDay[nIndex])
     cfg.drawFigure(pqdata, fname, 'BOLL Line in ' + listTradeDay[nIndex], ['position'])
-    plt= pqdata.plot(title= 'BOLL Line in ' + listTradeDay[nIndex], fontsize= 20, figsize=(40,30), secondary_y= ['position'])
     return
    
 def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position):
@@ -78,10 +77,9 @@ def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold,
     else:
         return 'hold'   
     
-def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, iniPosition):
+def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam, iniPosition):
     pdTrade= pd.DataFrame(columns=('time', 'symbol', 'type', 'volume', 'price'))
-    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay, nIndex)
+    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam['nParamDay'])
     pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
     if not 'future' in iniPosition.index:
         iniPosition.loc['future']= [0,0]
@@ -103,7 +101,7 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
         if nNearTrade> 0.1:
             nNearTrade-= 1
         elif tradeSignal!= 'hold':#check tradeSignal
-            nNearTrade= nTradeSilence
+            nNearTrade= tradeParam['nTradeSilence']
             if tradeSignal== 'buy':
                 pdTrade= pdTrade.append({'time': time, 'symbol': jqETFID, 'type': 'etf', 'volume': statInfo[0], 'price': row['askp']}, ignore_index=True)
                 pdTrade= pdTrade.append({'time': time, 'symbol': jqFutureID, 'type': 'future', 'volume': -1, 'price': row['fb1_p']}, ignore_index=True)
@@ -114,7 +112,8 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
                 fposition-= 1
             tradeSignal= 'hold'
         else:#check trade
-            tradeSignal= checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, fposition)
+            tradeSignal= checkTrade(row, statInfo, tradeParam['tradeThreshold'], tradeParam['positionThreshold'], 
+                                    tradeParam['levelThreshold'], fposition)
          
     pdPosition= pdTrade.groupby(['type']).agg({'volume':'sum', 'price':'count'})
     if not 'future' in pdPosition.index:
@@ -141,52 +140,46 @@ def simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold
                 PL+= index[1]* row.time* (futureClose- row.price)* fMultiply
     statInfo.append(nintraDayTrade)
     statInfo.append(PL)  
-    return pdTrade, pdPosition, statInfo
+    return pdPosition, statInfo
 
-def PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionThreshold, listTradeDay, sIndex, eIndex):
+def getNextMonthFutureID(future, strDate):
+    year= int(strDate[2:4])
+    month= int(strDate[4:6])
+    if month== 12:
+        strnm= str(year+1)+ '01'
+    else:
+        strnm= str(year)+ str(month+ 1).zfill(2)
+    return '%s%s.CCFX'% (future, strnm)
+
+def PairTradeStrategy(jqETFID, future, tradeParam, listTradeDay):
     pdTradeInfo= pd.DataFrame(columns=('etfOrderVolumns', 'midMean', 'midStd', 'futurePosition', 'nintraDayTrade', 'PL'))
-    pdAllTrade= pd.DataFrame(columns=('time', 'symbol', 'type', 'volume', 'price'))
+    lastjqFutureID= ''
     iniPosition= pd.DataFrame(columns=('volume', 'price'))
-    for nIndex in range(sIndex, eIndex):
-        pdTrade, pdPosition, statInfo= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-                levelThreshold, nTradeSilence, iniPosition)
-        drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniPosition)
-        iniPosition= pdPosition
+    for nIndex in range(sIndex, len(listTradeDay)):
         tday= listTradeDay[nIndex]
+        jqFutureID= getNextMonthFutureID(future, tday)
+        if jqFutureID!= lastjqFutureID:
+            iniPosition= pd.DataFrame(columns=('volume', 'price'))
+        pdPosition, statInfo= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam, iniPosition)
+        #drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam['nParamDay'], pdTrade, iniPosition)
+        iniPosition= pdPosition
+        lastjqFutureID= jqFutureID
         print('day: %s, P&L: %0.2f'% (tday, statInfo[-1]))
         pdTradeInfo.loc[tday]= statInfo
-        pdAllTrade= pd.concat([pdAllTrade, pdTrade], axis= 0)
-    return pdTradeInfo, pdAllTrade
+    saveName= jqETFID+ '_'+ future
+    for v in tradeParam.values():
+        saveName+= '_'+ str(v)
+    saveName+= '.csv'
+    cfg.saveResult(pdTradeInfo, saveName)
+    return
 
 if __name__ == '__main__':
     t0 = ti.time()
-    jqFutureID= 'IF2007.CCFX'
+    future= 'IF'#'2007.CCFX'
     jqETFID= '510300.XSHG'
     listTradeDay= cfg.getTradeDays()
-    nIndex= -1
-    nTestDay= 10
-    tradeThreshold= 1
-    positionThreshold= 5
-    levelThreshold= 8
-    nTradeSilence= 3
-    nParamDay= 5
-    mdata= cfg.getMergeData(jqETFID, jqFutureID, listTradeDay[nIndex])
-    statInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay, nIndex)#unitETFVolumns, basisMean, basisStd
-    print('day: '+ listTradeDay[nIndex])
-    print('unitETFVolumns: %d'% statInfo[0])
-    print('basisMean: %d'% statInfo[1])
-    print('basisStd: %d'% statInfo[2])
-    pqdata= getPairQuote(jqETFID, jqFutureID, listTradeDay[nIndex], statInfo[0])
-    iniPosition= pd.DataFrame(columns=('volume', 'price'))
-    pdTrade, pdPosition, statInfo= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, tradeThreshold, positionThreshold, 
-            levelThreshold, nTradeSilence, iniPosition)
-    print('day: %s, P&L: %0.2f'% (listTradeDay[nIndex], statInfo[-1]))
-    pdTradeInfo, pdAllTrade= PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionThreshold, listTradeDay, -nTestDay, 0)
-    nextDayStatInfo= getPairStatInfo(jqETFID, jqFutureID, listTradeDay, nParamDay)
-    print('next day: '+ listTradeDay[-1])
-    print('unitETFVolumns: %d'% nextDayStatInfo[0])
-    print('basisMean: %d'% nextDayStatInfo[1])
-    print('basisStd: %d'% nextDayStatInfo[2])
+    tradeParam= cfg.tradeParam
+    PairTradeStrategy(jqETFID, future, tradeParam, listTradeDay)
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
 
 

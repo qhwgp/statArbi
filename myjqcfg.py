@@ -6,6 +6,9 @@ Created on Tue Jun 23 10:05:31 2020
 """
 from os import path
 import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import date, datetime, timedelta
+
 
 host='127.0.0.1'
 user='sa'
@@ -24,16 +27,24 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-jqDataPath= 'F:\\LenovoSync\\jqData'
-#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+#jqDataPath= 'F:\\LenovoSync\\jqData'
+jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 #jqDataPath= "H:\jqData"
 
 #trade params
-tradeThreshold= 1
-positionThreshold= 10
-levelThreshold= 5
-nTradeSilence= 3
-nParamDay= 5
+tradeParam= {'tradeThreshold': 1,
+    'positionThreshold': 5,
+    'levelThreshold': 8,
+    'nTradeSilence': 3,
+    'nParamDay': 5}
+
+def getStrToday(tback= 0):
+    return (date.today()-timedelta(days= tback)).strftime("%Y%m%d")
+
+def getStrNextDay(strDate):
+    dt= datetime.strptime(strDate,'%Y%m%d')
+    dt= dt+ timedelta(days=1)
+    return dt.strftime("%Y%m%d")
 
 def getFutureMultiply(jqFutureID):
     f2= jqFutureID[0:2]
@@ -78,9 +89,9 @@ def getMergeData(jqETFID, jqFutureID, sdate, nDrop= 10):
 def drawFigure(data, fname, ftitle, secondY):
     filePath= path.join(jqDataPath, 'figure', fname)
     data.plot(title= ftitle, fontsize= 20, figsize=(40,30), secondary_y= secondY).get_figure().savefig(filePath)
+    plt.close('all')
     
-    
-    
-    
-    
+def saveResult(pdData, saveName):
+    filePath= path.join(jqDataPath,'modelResult', saveName)
+    pdData.to_csv(filePath)
     
