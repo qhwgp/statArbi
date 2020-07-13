@@ -151,35 +151,48 @@ def getNextMonthFutureID(future, strDate):
         strnm= str(year)+ str(month+ 1).zfill(2)
     return '%s%s.CCFX'% (future, strnm)
 
-def PairTradeStrategy(jqETFID, future, tradeParam, listTradeDay):
+def PairTradeStrategy(tradeParam):
+    jqETFID= tradeParam['jqETFID']
+    future= tradeParam['future']
+    listTradeDay= cfg.getTradeDays()
     pdTradeInfo= pd.DataFrame(columns=('etfOrderVolumns', 'midMean', 'midStd', 'futurePosition', 'nintraDayTrade', 'PL'))
     lastjqFutureID= ''
     iniPosition= pd.DataFrame(columns=('volume', 'price'))
-    for nIndex in range(sIndex, len(listTradeDay)):
+    for nIndex in range(10, len(listTradeDay)):
         tday= listTradeDay[nIndex]
         jqFutureID= getNextMonthFutureID(future, tday)
         if jqFutureID!= lastjqFutureID:
             iniPosition= pd.DataFrame(columns=('volume', 'price'))
         pdPosition, statInfo= simuDay(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam, iniPosition)
-        #drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, tradeParam['nParamDay'], pdTrade, iniPosition)
         iniPosition= pdPosition
         lastjqFutureID= jqFutureID
         print('day: %s, P&L: %0.2f'% (tday, statInfo[-1]))
         pdTradeInfo.loc[tday]= statInfo
-    saveName= jqETFID+ '_'+ future
+    saveName= ''
     for v in tradeParam.values():
         saveName+= '_'+ str(v)
     saveName+= '.csv'
-    cfg.saveResult(pdTradeInfo, saveName)
+    cfg.saveResult(pdTradeInfo, saveName[1:])
     return
 
 if __name__ == '__main__':
     t0 = ti.time()
-    future= 'IF'#'2007.CCFX'
-    jqETFID= '510300.XSHG'
-    listTradeDay= cfg.getTradeDays()
     tradeParam= cfg.tradeParam
-    PairTradeStrategy(jqETFID, future, tradeParam, listTradeDay)
+    
+    lsigna= np.linspace(0.5, 2, 16)
+    lpday= range(1,11)
+    lns= [1, 5, 10, 15, 20]
+    listTradeParam=[]
+    for s in lsigna:
+        for p in lpday:
+            for ns in lns:
+                ntp= tradeParam.copy()
+                ntp['tradeThreshold']= s
+                ntp['nParamDay']= p
+                ntp['nTradeSilence']= ns
+                listTradeParam.append(ntp)
+                
+    PairTradeStrategy(tradeParam)
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
 
 

@@ -25,7 +25,7 @@ def syncListTickData(listJQID, listDate):
         for jqID in listJQID:
             filePath= path.join(cfg.jqDataPath,'tickData' , jqID+ sdate+ '.csv')
             if not path.exists(filePath):
-                tickPdData= jq.get_ticks(jqID, start_dt= sdate, end_dt= getStrNextDay(sdate), count= None)
+                tickPdData= jq.get_ticks(jqID, start_dt= sdate, end_dt= cfg.getStrNextDay(sdate), count= None)
                 if len(tickPdData)>1:
                     tickPdData.to_csv(filePath, index= 0)
     
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     jq.auth(cfg.jqUser, cfg.jqPwd)
     jq.get_query_count()
     codelist= ['510500','510300','510330','IF2007','IF2008','IF2009','IC2007','IC2008','IC2009']
-    edate= cfg.getStrToday()
+    edate= cfg.getStrToday(1)
     listJQID= jq.normalize_code(codelist)
     listDate= syncListTradeDay('20190101', edate)
     syncListTickData(listJQID, listDate)

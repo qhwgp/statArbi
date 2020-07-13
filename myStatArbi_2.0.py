@@ -66,7 +66,7 @@ def drawBOLL(jqETFID, jqFutureID, listTradeDay, nIndex, nParamDay, pdTrade, iniP
     pqdata.drop(['volume'], axis= 1, inplace=True)
     fname= 'BOLL_%s_%s_%s.png'% (jqETFID, jqFutureID, listTradeDay[nIndex])
     cfg.drawFigure(pqdata, fname, 'BOLL Line in ' + listTradeDay[nIndex], ['position'])
-    plt= pqdata.plot(title= 'BOLL Line in ' + listTradeDay[nIndex], fontsize= 20, figsize=(40,30), secondary_y= ['position'])
+    #plt= pqdata.plot(title= 'BOLL Line in ' + listTradeDay[nIndex], fontsize= 20, figsize=(40,30), secondary_y= ['position'])
     return
    
 def checkTrade(row, statInfo, tradeThreshold, positionThreshold, levelThreshold, position):
@@ -160,8 +160,8 @@ def PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionT
 
 if __name__ == '__main__':
     t0 = ti.time()
-    jqFutureID= 'IF2007.CCFX'
-    jqETFID= '510300.XSHG'
+    jqFutureID= 'IF2009.CCFX'
+    jqETFID= '510330.XSHG'
     listTradeDay= cfg.getTradeDays()
     nIndex= -1
     nTestDay= 10
@@ -188,30 +188,4 @@ if __name__ == '__main__':
     print('basisMean: %d'% nextDayStatInfo[1])
     print('basisStd: %d'% nextDayStatInfo[2])
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

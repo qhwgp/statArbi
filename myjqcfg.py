@@ -27,16 +27,18 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-#jqDataPath= 'F:\\LenovoSync\\jqData'
-jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+jqDataPath= 'F:\\LenovoSync\\jqData'
+#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 #jqDataPath= "H:\jqData"
 
 #trade params
-tradeParam= {'tradeThreshold': 1,
-    'positionThreshold': 5,
-    'levelThreshold': 8,
-    'nTradeSilence': 3,
-    'nParamDay': 5}
+tradeParam= {'jqETFID': '510300.XSHG',
+            'future': 'IF',
+            'tradeThreshold': 1,
+            'positionThreshold': 5,
+            'levelThreshold': 8,
+            'nTradeSilence': 3,
+            'nParamDay': 4}
 
 def getStrToday(tback= 0):
     return (date.today()-timedelta(days= tback)).strftime("%Y%m%d")
