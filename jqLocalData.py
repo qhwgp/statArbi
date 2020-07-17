@@ -41,8 +41,8 @@ if __name__ == '__main__':
     t0 = ti.time()
     jq.auth(cfg.jqUser, cfg.jqPwd)
     jq.get_query_count()
-    codelist= ['510500','510300','510330','IF2007','IF2008','IF2009','IC2007','IC2008','IC2009']
-    edate= cfg.getStrToday(1)
+    codelist= ['510500','510300','510330','IH2012', 'IF2007','IF2008','IF2009','IC2007','IC2008','IC2009']
+    edate= cfg.getStrToday()
     listJQID= jq.normalize_code(codelist)
     listDate= syncListTradeDay('20190101', edate)
     syncListTickData(listJQID, listDate)

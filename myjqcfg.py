@@ -27,8 +27,8 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-#jqDataPath= 'F:\\LenovoSync\\jqData'
-jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+jqDataPath= 'F:\\LenovoSync\\jqData'
+#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 #jqDataPath= "H:\jqData"
 
 #trade params
