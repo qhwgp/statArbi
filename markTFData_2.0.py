@@ -17,8 +17,10 @@ def normETFCode(code):
     code=str(code)
     if code[0]=='5':
         return code[:5]+'0'
-    else:
+    elif code[0]=='1':
         return code
+    else:
+        return 'unmarked'
     
 def codeStr(strData):
     try:
@@ -49,45 +51,43 @@ def getMarkData(data):
     lsdata= data[data['codeType']=='other']
     data.loc[lsdata.index, 'mark']= 'cash'
     undoData= data[data['mark']=='unmarked']
-    undoData['codeType']= undoData['relative_code'].map(codeType)
-    lsdata= undoData[undoData['codeType']=='etf']
+
+    listStockBN= ['申购赎回过入', '申购赎回过出', '证券买入', '证券卖出']
+    lsdata= undoData[(undoData['business_name'].isin(listStockBN)==False)|(undoData['sec_chg']==0)]
     data.loc[lsdata.index, 'mark']= lsdata['relative_code'].map(normETFCode)
     undoData= data[data['mark']=='unmarked']
     
+
     #undoData.iloc[0]
     lsdata= undoData.groupby('sec_code')['serial_no'].count()
     for scode in lsdata.index:
-        #scode= lsdata.index[-1]#for scode in lsdata.index:
+        #scode= lsdata.index[-1]
         
         sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券买入')|(data['business_name']== '申购赎回过出'))]
-        sdata['isMatched']=False
         nLsData= len(sdata)
         for iRow in range(nLsData):
             if sdata.iloc[iRow]['business_name']=='申购赎回过出':
                 cRow= 0
                 qty= -sdata.iloc[iRow]['sec_chg']
                 while cRow<nLsData:
-                    if sdata.iloc[cRow]['business_name']=='证券买入' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['isMatched']==False:
-                        sdata.iloc[cRow,13]=sdata.iloc[iRow]['mark']
-                        sdata.iloc[cRow,15]=True
-                        sdata.iloc[iRow,15]=True
+                    if sdata.iloc[cRow]['business_name']=='证券买入' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['mark']=='unmarked':
+                        sdata.iloc[cRow,13]= sdata.iloc[iRow,12]
+                        sdata.iloc[iRow,13]= sdata.iloc[iRow,12]
                         break
                     else:
                         cRow+=1
         data.loc[sdata.index, 'mark']= sdata['mark']
                         
         sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券卖出')|(data['business_name']== '申购赎回过入'))]
-        sdata['isMatched']=False
         nLsData= len(sdata)
         for iRow in range(nLsData):
             if sdata.iloc[iRow]['business_name']=='申购赎回过入':
                 cRow= 0
                 qty= -sdata.iloc[iRow]['sec_chg']
                 while cRow<nLsData:
-                    if sdata.iloc[cRow]['business_name']=='证券卖出' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['isMatched']==False:
-                        sdata.iloc[cRow,13]=sdata.iloc[iRow]['mark']
-                        sdata.iloc[cRow,15]=True
-                        sdata.iloc[iRow,15]=True
+                    if sdata.iloc[cRow]['business_name']=='证券卖出' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['mark']=='unmarked':
+                        sdata.iloc[cRow,13]= sdata.iloc[iRow,12]
+                        sdata.iloc[iRow,13]= sdata.iloc[iRow,12]
                         break
                     else:
                         cRow+=1
@@ -95,9 +95,12 @@ def getMarkData(data):
         
     undoData= data[data['mark']=='unmarked']
     for inde in undoData.index:
+        #inde= undoData.index[0]
         scode= undoData.loc[inde, 'sec_code']
         qty= undoData.loc[inde, 'sec_chg']
-        if undoData.loc[inde, 'business_name']== '证券买入':
+        lsdata= undoData[(undoData['sec_code']== scode)]
+        #wap
+        if lsdata.loc[inde, 'business_name']== '证券买入':
             sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券买入')|\
                     (data['business_name']== '申购赎回过出'))].groupby('mark')['sec_chg'].sum()
             for mk in sdata.index:
@@ -128,36 +131,13 @@ if __name__ == '__main__':
     
     listDate= alldata.groupby('busi_date')['serial_no'].count().index
     
-    #alldata['sec_code']= alldata['sec_code'].map(codeStr)
-    #alldata['fscode']=alldata['sec_code'].map(lambda x:x[0])
-    #lsdata=alldata[(alldata['fscode']!='0')&(alldata['fscode']!='1')&(alldata['fscode']!='3')&(alldata['fscode']!='5')&(alldata['fscode']!='6')]
+    #tdate= listDate[0]
     
     for tdate in listDate:
         print('deal data date: %d, '% tdate)
         data= alldata[(alldata['busi_date']<= tdate)&(alldata['mark']=='unmarked')]
         data= getMarkData(data)
         alldata.loc[data.index, 'mark']= data['mark']
-        #lsdata= data[data['codeType']=='stock'].groupby(['mark','sec_code'])['sec_chg','fund_chg'].sum()
-        #lsdata= lsdata[lsdata['sec_chg']!= 0]
-
-    """
-    lsdata= data[(data['business_name']=='ETF申购')|(data['business_name']=='ETF赎回')]
-    for i in range(len(lsdata)):
-        rcn= lsdata.iloc[i,9]
-        dn= lsdata.iloc[i,8]
-        scode= lsdata.iloc[i,4]
-        srdata= undoData[(undoData['rpt_contract_no']== rcn)&(undoData['sec_type']!= '55')]
-        data.loc[srdata.index, 'mark']= scode
-    
-    undoData= alldata[alldata['mark']=='unmarked']
-    scode= '300054'
-    stockdata= alldata[(alldata['sec_code']== scode)&(alldata['mark']=='unmarked')]
-    gpdata= alldata[alldata['sec_code']== scode].groupby('mark')['sec_chg'].sum()
-    
-    lsdata= undoData[(undoData['business_name']!= '证券买入')&(undoData['business_name']!= '证券卖出')]
-    
-    
-    """
     
     print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
     
