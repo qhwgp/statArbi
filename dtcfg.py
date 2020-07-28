@@ -1,30 +1,75 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Jul 18 00:27:39 2020
+Created on Tue Jul 28 09:14:56 2020
 
 @author: WAP
 """
-from os import path
-import pandas as pd
-import time as ti
-import warnings
 from pymssql import connect
 from sqlalchemy import create_engine
+import time as ti
+import pandas as pd
+import warnings
 warnings.filterwarnings('ignore')
+
+host='172.21.6.152'
+user='wanggp'
+pwd='Wanggp@0511'
+dcadb='data_ceneter_all'
+lcdb='Wangprivate'
+
+def timeStart():
+    return ti.time()
+    
+def timeEnd(t0):
+    print('All done, time elapsed: %.2f min' %  ((ti.time() - t0)/60))
 
 def deStrCode(strData):
     try:
         return str.strip(strData.encode('latin1').decode('GB2312'))
     except:
-        return strData
+        return str.strip(strData)
+    
+def myStr(myStr):
+    try:
+        resultData= int(myStr)
+    except:
+        resultData= myStr
+    return str(resultData)
 
+def myInt(mystr):
+    try:
+        return int(mystr)
+    except:
+        return 0
+    
+#2
+def normETFCode(code):
+    code=str(code)
+    if code[0]=='5':
+        return code[:5]+'0'
+    elif code[0]=='1':
+        return code
+    else:
+        return 'unmarked'
+    
+def code_type(myStr):
+    try:
+        if myStr[0]== '1' or myStr[0]== '5':
+            return 'etf'
+        elif myStr[0]== '0' or myStr[0]== '3' or myStr[0]== '6':
+            return 'stock'
+        else:
+            return 'other'
+    except:
+        return 'other'
+    
 class MSSQL:
-
     def __init__(self,host,user,pwd,db):
         self.host = host
         self.user = user
         self.pwd = pwd
         self.db = db
+        self.engine = create_engine("mssql+pymssql://%s:%s@%s:1433/%s"%(user, pwd, host, db))
         self.isConnect= False
 
     def Connect(self):
@@ -43,8 +88,8 @@ class MSSQL:
         self.cur.close()
         self.conn.close()
         
-    def getDate(self, startDate= 0):
-        sql="select distinct busi_date from TFDT where busi_date >= %d order by busi_date" % startDate
+    def getDate(self, datatable, startDate= 0):
+        sql="select distinct busi_date from %s where busi_date >= %d order by busi_date" % (datatable, startDate)
         data= pd.read_sql(sql, con=self.conn)
         return list(data['busi_date'])
         
@@ -55,20 +100,25 @@ class MSSQL:
         return data
     
     def getUnmarkedData(self,tDate):
-        sql= "select * from TFDT where busi_date<=%d and mark='unmarked'"% tDate
-        data= pd.read_sql(sql, con=self.conn)
-        data['business_name']= data['business_name'].map(deStrCode)
-        return data
+        data= self.getDateData(tDate)
+        data['mark']= 'unmarked'
+        data['mark_date']= 0
+        data['sec_type']= data['sec_code'].map(code_type)
+        sql= "select * from SRDT where busi_date<%d and mark='unmarked'"% tDate
+        unmarkdata= pd.read_sql(sql, con=self.conn)
+        unmarkdata['business_name']= unmarkdata['business_name'].map(deStrCode)
+        return pd.concat([unmarkdata, data], axis= 0, ignore_index= True)
     
     def getData(self, sql):
-        data= pd.read_sql(sql, con=self.conn)
+        self.cur.execute(sql)
+        data= pd.read_sql(sql, con=self.conn) 
         return data
     
-    def addData(self, engine, data):
+    def addData(self, data):
         if len(data)> 0:
-            data.to_sql('TFDT', con= engine, if_exists= 'append', index= False)
+            data.to_sql('SRDT', con= self.engine, if_exists= 'append', index= False)
 
-    def updateMarkData(self, engine, data):
+    def updateData(self, data):
         try:
             self.cur.execute('drop table tempDT')
         except:
@@ -86,72 +136,166 @@ class MSSQL:
         contract_no    VARCHAR(30),
         rpt_contract_no    VARCHAR(30),
         done_no    VARCHAR(30),
-        done_date VARCHAR(30),
+        done_date int,
         relative_code VARCHAR(30),
         mark VARCHAR(30),
-        code_type VARCHAR(30),
-        PRIMARY KEY(serial_no,busi_date)
-        )
+        mark_date int,
+        PRIMARY KEY(serial_no,busi_date))
         """
         self.cur.execute(sqlword)
-        data.to_sql('tempDT', con= engine, if_exists= 'append', index= False)
-        sql="UPDATE TFDT SET mark=t.mark, code_type=t.code_type FROM (SELECT * from tempDT) AS t WHERE TFDT.serial_no=t.serial_no and TFDT.busi_date=t.busi_date"
+        data.to_sql('tempDT', con= self.engine, if_exists= 'append', index= False)
+        sql="UPDATE SRDT SET mark=t.mark, mark_date=t.mark_date FROM (SELECT * from tempDT) AS t WHERE SRDT.serial_no=t.serial_no and SRDT.busi_date=t.busi_date"
         self.cur.execute(sql)
-
-def normETFCode(code):
-    code=str(code)
-    if code[0]=='5':
-        return code[:5]+'0'
-    elif code[0]=='1':
-        return code
-    else:
-        return 'unmarked'
+        
+    def updateMarkData(self, data, tdate):
+        lsdata= data[data['busi_date']< tdate]
+        if len(lsdata)> 0:
+            self.updateData(lsdata)
+        lsdata= data[data['busi_date']== tdate]
+        if len(lsdata)> 0:
+            self.addData(lsdata)
+            
+    def getsubData(self, scode, tdate):
+        sqlword = """
+        select * from SRDT where mark='%s' and 
+        (business_name not in ('ETF申购过户费冻结','ETF申购过户费解冻')) and 
+        (
+        (done_no in (select done_no from SRDT where busi_date=%d and business_name in ('ETF申购','ETF现金申购份额确认') and 
+                     sec_code='%s'  and done_no<>'0')) or
+        (rpt_contract_no in (select rpt_contract_no from SRDT where busi_date=%d and 
+                             business_name in ('ETF申购','ETF现金申购份额确认') and sec_code='%s')) or
+        (business_name in ('现金替代补款', '现金替代退款', '证券买入') and done_date=%d)
+        ) 
+        order by sec_code, serial_no
+        """%(scode, tdate, scode, tdate, scode, tdate)
+        data= pd.read_sql(sqlword, con=self.conn)
+        return data
     
-def codeStr(strData):
-    try:
-        res= str(int(strData)).zfill(6)
-    except:
-        res= str(strData)
-    return res
-
-def myInt(myStr):
-    try:
-        resultData= str(int(myStr))
-    except:
-        resultData= myStr
-    return resultData
+    def getRedeemData(self, scode, tdate):
+        sqlword = """
+        select * from SRDT where mark='%s' and 
+        (business_name not in ('ETF赎回过户费冻结','ETF赎回过户费解冻')) and 
+        (
+        (done_no in (select done_no from SRDT where busi_date=%d and business_name='ETF赎回' and 
+                     sec_code='%s'  and done_no<>'0')) or
+        (rpt_contract_no in (select rpt_contract_no from SRDT where busi_date=%d and 
+                             business_name='ETF赎回' and sec_code='%s')) or
+        (business_name in ('现金替代补款','证券卖出') and done_date=%d)
+        ) 
+        order by sec_code, serial_no
+        """%(scode, tdate, scode, tdate, scode, tdate)
+        data= pd.read_sql(sqlword, con=self.conn)
+        return data
     
-def code_type(myStr):
+def rebuildDT(localSQL, dataTable):
+    if input('del Data Base! PleaseConfirm:(y/n) ')!= 'y':
+        return
     try:
-        if myStr[0]== '1' or myStr[0]== '5':
-            return 'etf'
-        elif myStr[0]== '0' or myStr[0]== '3' or myStr[0]== '6':
-            return 'stock'
-        else:
-            return 'other'
+        localSQL.cur.execute('drop table %s'% dataTable)
     except:
-        return 'other'
+        pass
+    sqlword = """
+    CREATE TABLE  %s (
+    serial_no VARCHAR(30) NOT NULL,
+    busi_date int,
+    business_name  VARCHAR(30),
+    fund_chg     float,
+    sec_code  VARCHAR(30),
+    sec_type   VARCHAR(30),
+    sec_chg float,
+    done_amt    float,
+    contract_no    VARCHAR(30),
+    rpt_contract_no    VARCHAR(30),
+    done_no    VARCHAR(30),
+    done_date VARCHAR(30),
+    relative_code VARCHAR(30),
+    PRIMARY KEY(serial_no,busi_date)
+    )
+    """% dataTable
+    localSQL.cur.execute(sqlword)
+    return
+
+def rebuildSRDT(localSQL):
+    try:
+        localSQL.cur.execute('drop table SRDT')
+    except:
+        pass
+    sqlword = """
+    CREATE TABLE  SRDT (
+    serial_no VARCHAR(30) NOT NULL,
+    busi_date int,
+    business_name  VARCHAR(30),
+    fund_chg     float,
+    sec_code  VARCHAR(30),
+    sec_type   VARCHAR(30),
+    sec_chg float,
+    done_amt    float,
+    contract_no    VARCHAR(30),
+    rpt_contract_no    VARCHAR(30),
+    done_no    VARCHAR(30),
+    done_date VARCHAR(30),
+    relative_code VARCHAR(30),
+    mark  VARCHAR(30),
+    mark_date int,
+    PRIMARY KEY(serial_no,busi_date)
+    )
+    """
+    localSQL.cur.execute(sqlword)
+
+def syncDateData(clsSQL, localSQL, engine, tdate):
+    sql= "select serial_no, busi_date, business_name, fund_chg, sec_code, sec_type, sec_chg, done_amt, contract_no,\
+            rpt_contract_no, done_no, done_date, relative_code from uv_tcl_his_fund_stock_chg_71 where busi_date= %s order by serial_no" % tdate
+    data= clsSQL.getData(sql)
+    data['business_name']= data['business_name'].map(deStrCode)
+    data['busi_date']= data['busi_date'].map(myInt)
+    data['done_date']= data['done_date'].map(myInt)
+    data['done_no']= data['done_no'].map(myStr)
+    data['sec_code']= data['sec_code'].map(str.strip)
+    data['contract_no']= data['contract_no'].map(str.strip)
+    data['relative_code']= data['relative_code'].map(str.strip)
+    data['busi_date']= tdate
+    data.to_sql('TFDT', con= engine, if_exists= 'append', index= False)
+    
+def syncData(clsSQL, localSQL, intSDate= 0):
+    engine = create_engine("mssql+pymssql://%s:%s@%s:1433/%s"%(localSQL.user, localSQL.pwd, localSQL.host, localSQL.db))
+    sql= "select distinct busi_date from uv_tcl_his_fund_stock_chg_71 order by busi_date"
+    pdDate= clsSQL.getData(sql)
+    listDate= pdDate['busi_date'].values.tolist()
+    
+    sql= "select distinct busi_date from TFDT"
+    localDate= localSQL.getData(sql)
+    listLocalDate= localDate['busi_date'].map(lambda x:str(x)[:8]).values.tolist()
+    
+    for dt in listDate:
+        if dt< intSDate:
+            continue
+        tdate= str(dt)[:8]
+        if tdate in listLocalDate:
+            continue
+        print('sync date: '+ tdate)
+        syncDateData(clsSQL, localSQL, engine, tdate)
+    print('last date: '+ tdate)
     
 def getMarkData(data, tdate):
-    data['code_type']= data['sec_code'].map(code_type)
-    lsdata= data[data['code_type']=='etf']
+    data['business_name']= data['business_name'].map(deStrCode)
+    data= data[((data['sec_type']!='etf')|(data['business_name'].isin(['证券买入', '证券卖出'])== False))&\
+               (data['sec_type']!='other')]
+    lsdata= data[data['business_name'].isin(['证券买入', '证券卖出'])]
+    data.loc[lsdata.index, 'contract_no']= ''
+    data.loc[lsdata.index, 'rpt_contract_no']= ''
+    data.loc[lsdata.index, 'done_no']= ''
+    lsdata= data[data['sec_type']=='etf']
     data.loc[lsdata.index, 'mark']= lsdata['sec_code'].map(normETFCode)
-    lsdata= data[data['code_type']=='other']
-    data.loc[lsdata.index, 'mark']= 'cash'
-    #data= data.drop(['code_type'], axis=1)
+    lsdata= data[data['sec_code']=='159900']
+    data.loc[lsdata.index, 'mark']= lsdata['relative_code']
     undoData= data[data['mark']=='unmarked']
-
     listStockBN= ['申购赎回过入', '申购赎回过出', '证券买入', '证券卖出']
-    lsdata= undoData[(undoData['business_name'].isin(listStockBN)==False)|(undoData['sec_chg']==0)]
+    lsdata= undoData[(undoData['business_name'].isin(listStockBN)== False)|(undoData['sec_chg']==0)]
     data.loc[lsdata.index, 'mark']= lsdata['relative_code'].map(normETFCode)
     undoData= data[data['mark']=='unmarked']
-    
-
-    #undoData.iloc[0]
     lsdata= undoData.groupby('sec_code')['serial_no'].count()
+    #vol matched data
     for scode in lsdata.index:
-        #scode= lsdata.index[-1]
-        
         sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券买入')|(data['business_name']== '申购赎回过出'))]
         nLsData= len(sdata)
         for iRow in range(nLsData):
@@ -166,7 +310,6 @@ def getMarkData(data, tdate):
                     else:
                         cRow+=1
         data.loc[sdata.index, 'mark']= sdata['mark']
-                        
         sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券卖出')|(data['business_name']== '申购赎回过入'))]
         nLsData= len(sdata)
         for iRow in range(nLsData):
@@ -181,11 +324,10 @@ def getMarkData(data, tdate):
                     else:
                         cRow+=1
         data.loc[sdata.index, 'mark']= sdata['mark']
-        
     undoData= data[data['mark']=='unmarked']
     nadp= 0
     nUndo= len(undoData)
-    #wap
+    #sum matched data
     for i in range(nUndo):
         inde= undoData.index[i]
         #inde= 31680
@@ -209,8 +351,6 @@ def getMarkData(data, tdate):
                     if -outqty== qty:
                         sdata= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券买入'))]
                         undoData.loc[sdata.index, 'mark']= rcode
-                        #data.loc[sdata.index, 'mark']= rcode
-
                     elif -outqty< qty:
                         sdata= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券买入'))]
                         undoData.loc[sdata.index, 'mark']= rcode
@@ -226,7 +366,6 @@ def getMarkData(data, tdate):
                         apd.done_amt= -(qty+ outqty)/qty* gdata.loc[('证券买入', scode), 'done_amt']
                         apd.mark= rcode
                         undoData= undoData.append(apd)
-                        
                         nadp+= 1
                         seqno= str(tdate)+ str(nadp).zfill(4)
                         apd.name= seqno
@@ -265,7 +404,6 @@ def getMarkData(data, tdate):
                         apd.done_amt= -(qty+ outqty)/qty* gdata.loc[('证券卖出', scode), 'done_amt']
                         apd.mark= rcode
                         undoData= undoData.append(apd)
-                        
                         nadp+= 1
                         seqno= str(tdate)+ str(nadp).zfill(4)
                         apd.name= seqno
@@ -279,15 +417,8 @@ def getMarkData(data, tdate):
                         
                     else:
                         pass
-    #lsdata= undoData[(undoData['rpt_contract_no']!= 'append')|(undoData['busi_date']!= tdate)]
     data.loc[undoData.index[:nUndo], 'mark']= undoData['mark']
-    if len(undoData)> nUndo:
-        apdata= undoData.iloc[nUndo:]
-    else:
-        apdata= pd.DataFrame()
-    
-    #data.loc[undoData.index[:nUndo], 'mark']= undoData['mark']
-    
+    data= pd.concat([data, undoData.iloc[nUndo:]], axis= 0)
     undoData= data[data['mark']=='unmarked']
     nUndo= len(undoData)
     #wap2
@@ -352,83 +483,84 @@ def getMarkData(data, tdate):
             for inde in lsdata.index:
                 qty= lsdata.loc[inde, 'sec_chg']
                 rcode= lsdata.loc[inde, 'relative_code']
+                nadp+= 1
+                seqno= str(tdate)+ str(nadp).zfill(4)
+                apd.name= seqno
+                apd.serial_no= seqno
+                apd.rpt_contract_no= 'append'
+                apd.sec_chg= -qty
+                apd.fund_chg= qty* unitamt
                 if lsdata.loc[inde, 'business_name']== '申购赎回过出':
                     undoData.loc[inde, 'mark']= rcode
-                    nadp+= 1
-                    seqno= str(tdate)+ str(nadp).zfill(4)
-                    apd.name= seqno
-                    apd.serial_no= seqno
-                    apd.rpt_contract_no= 'append'
                     apd.business_name= '证券买入'
-                    apd.sec_chg= -qty
-                    apd.fund_chg= qty* unitamt
                     apd.done_amt= -qty* unitamt
                     apd.mark= rcode
-                    undoData= undoData.append(apd)
                 elif lsdata.loc[inde, 'business_name']== '申购赎回过入':
                     undoData.loc[inde, 'mark']= rcode
-                    nadp+= 1
-                    seqno= str(tdate)+ str(nadp).zfill(4)
-                    apd.name= seqno
-                    apd.serial_no= seqno
-                    apd.rpt_contract_no= 'append'
                     apd.business_name= '证券卖出'
-                    apd.sec_chg= -qty
-                    apd.fund_chg= qty* unitamt
                     apd.done_amt= qty* unitamt
                     apd.mark= rcode
-                    undoData= undoData.append(apd)
                 elif lsdata.loc[inde, 'business_name']== '证券买入':
                     undoData.loc[inde, 'mark']= 'trade'
-                    nadp+= 1
-                    seqno= str(tdate)+ str(nadp).zfill(4)
-                    apd.name= seqno
-                    apd.serial_no= seqno
-                    apd.rpt_contract_no= 'append'
                     apd.business_name= '证券卖出'
-                    apd.sec_chg= -qty
-                    apd.fund_chg= qty* unitamt
                     apd.done_amt= qty* unitamt
                     apd.mark= 'trade'
-                    undoData= undoData.append(apd)
-                    """
-    lsdata= undoData[(undoData['rpt_contract_no']!= 'append')|(undoData['busi_date']!= tdate)]
-    data.loc[lsdata.index, 'mark']= lsdata['mark']
-    apdata= pd.concat([apdata, undoData[(undoData['rpt_contract_no']== 'append')&(undoData['busi_date']== tdate)]], axis= 0)
-    """
+                undoData= undoData.append(apd)
+        elif '证券卖出' in lsdata['business_name'].values:
+            codedata= lsdata[lsdata['business_name']== '证券卖出']
+            apd= codedata.iloc[0]
+            sumcode= codedata[['sec_chg', 'done_amt']].sum()
+            unitamt= -sumcode.done_amt/ sumcode.sec_chg
+            for inde in lsdata.index:
+                qty= lsdata.loc[inde, 'sec_chg']
+                rcode= lsdata.loc[inde, 'relative_code']
+                nadp+= 1
+                seqno= str(tdate)+ str(nadp).zfill(4)
+                apd.name= seqno
+                apd.serial_no= seqno
+                apd.rpt_contract_no= 'append'
+                apd.sec_chg= -qty
+                apd.fund_chg= qty* unitamt
+                if lsdata.loc[inde, 'business_name']== '申购赎回过出':
+                    undoData.loc[inde, 'mark']= rcode
+                    apd.business_name= '证券买入'
+                    apd.done_amt= -qty* unitamt
+                    apd.mark= rcode
+                elif lsdata.loc[inde, 'business_name']== '申购赎回过入':
+                    undoData.loc[inde, 'mark']= rcode
+                    apd.business_name= '证券卖出'
+                    apd.done_amt= qty* unitamt
+                    apd.mark= rcode
+                elif lsdata.loc[inde, 'business_name']== '证券卖出':
+                    undoData.loc[inde, 'mark']= 'trade'
+                    apd.business_name= '证券买入'
+                    apd.done_amt= qty* unitamt
+                    apd.mark= 'trade'
+                undoData= undoData.append(apd)
     data.loc[undoData.index[:nUndo], 'mark']= undoData['mark']
-    if len(undoData)> nUndo:
-        apdata= pd.concat([apdata, undoData.iloc[nUndo:]], axis= 0)
-    undoData= data[data['mark']=='unmarked']
-    return data, apdata, undoData
-    
-if __name__ == '__main__':
-    t0 = ti.time()
-    localSQL= MSSQL('127.0.0.1', 'sa', '123', 'markedTF71')
-    localSQL.Connect()
-    if not localSQL.isConnect:
-        print(localSQL.host + ' not connect')
-    else:
-        engine = create_engine("mssql+pymssql://sa:123@127.0.0.1:1433/markedTF71")
-        listDate= localSQL.getDate()
+    data= pd.concat([data, undoData.iloc[nUndo:]], axis= 0)
+    data.loc[data[data['mark']!='unmarked'].index, 'mark_date']= tdate
+    return data
 
-        for tdate in listDate:
-            print('deal data date: %d'% tdate)
-            #tdate= listDate[16]
-            data= localSQL.getUnmarkedData(tdate)  
-            data, apdata, undoData= getMarkData(data, tdate)
-            lsdata= pd.concat([data, apdata], axis= 0)
-            lsdata= lsdata[(lsdata['code_type']=='stock')&(lsdata['sec_chg']!= 0)].groupby('mark')['sec_chg'].sum()
-            lsdata= lsdata[(lsdata.index!='unmarked')&(lsdata.values!= 0)]
-            if len(lsdata)> 0:
-                codedata= data[(data['code_type']=='stock')&(data['sec_chg']!= 0)&(data['mark']== '159801')].groupby('sec_code')['sec_chg'].sum()
-                codedata= codedata[codedata.values!= 0]
-                print('error date: %d'% tdate)
-                break
-            
-            localSQL.updateMarkData(engine, data)
-            localSQL.addData(engine, apdata)
+def checkMarkData(data):
+    lsdata= data[(data['sec_type']=='stock')&(data['sec_chg']!= 0)].groupby('mark')['sec_chg'].sum()
+    lsdata= lsdata[(lsdata.index!='unmarked')&(lsdata.values!= 0)]
+    if len(lsdata)== 0:
+        return True
+    codedata= data[(data['sec_type']=='stock')&(data['sec_chg']!= 0)&(data['mark']== lsdata.index[0])].groupby('sec_code')['sec_chg'].sum()
+    code= codedata[codedata.values!= 0].index[0]
+    print('error code: %s'% code)
+    return False
 
-    print('All done, time elapsed: %.2f min' % ((ti.time() - t0)/60))
+def strip(text):
+    try:
+        return text.strip()
+    except:
+        return text
     
-    
+def getxlsData(fileName):
+    xlsdata = pd.read_excel(fileName, sheet_name= 0)
+    xlsdata.columns= list(map(strip, xlsdata.columns.values))
+    for j in range(len(xlsdata.columns)):
+        xlsdata.iloc[:, j]= xlsdata.iloc[:, j].map(strip)
+    return xlsdata

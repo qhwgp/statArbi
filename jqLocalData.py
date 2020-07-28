@@ -44,7 +44,7 @@ if __name__ == '__main__':
     codelist= ['510500','510300','510330','IH2012', 'IF2007','IF2008','IF2009','IC2007','IC2008','IC2009']
     edate= cfg.getStrToday()
     listJQID= jq.normalize_code(codelist)
-    listDate= syncListTradeDay('20190101', edate)
+    listDate= syncListTradeDay('20200101', edate)
     syncListTickData(listJQID, listDate)
     jq.logout()
     print('All done, time elapsed: %.2f min' %  ((ti.time() - t0)/60))

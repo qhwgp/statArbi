@@ -160,8 +160,8 @@ def PairTradeStrategy(jqETFID, jqFutureID, nParamDay, tradeThreshold , positionT
 
 if __name__ == '__main__':
     t0 = ti.time()
-    jqFutureID= 'IF2009.CCFX'
-    jqETFID= '510330.XSHG'
+    jqFutureID= 'IC2009.CCFX'
+    jqETFID= '510500.XSHG'
     listTradeDay= cfg.getTradeDays()
     nIndex= -1
     nTestDay= 5

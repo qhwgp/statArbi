@@ -9,9 +9,6 @@ import warnings
 warnings.filterwarnings('ignore')
 from pymssql import connect
 from sqlalchemy import create_engine
-from datetime import date
-from os import path
-import numpy as np
 import pandas as pd
 import time as ti
 
@@ -27,6 +24,12 @@ def myStr(myStr):
     except:
         resultData= myStr
     return str(resultData)
+
+def myInt(mystr):
+    try:
+        return int(mystr)
+    except:
+        return 0
 
 class MSSQL:
 
@@ -100,8 +103,6 @@ def rebuildDT(localSQL, dataTable):
     done_no    VARCHAR(30),
     done_date VARCHAR(30),
     relative_code VARCHAR(30),
-    mark VARCHAR(30),
-    code_type VARCHAR(30),
     PRIMARY KEY(serial_no,busi_date)
     )
     """% dataTable
@@ -112,13 +113,13 @@ def syncDateData(clsSQL, localSQL, engine, tdate):
             rpt_contract_no, done_no, done_date, relative_code from uv_tcl_his_fund_stock_chg_71 where busi_date= %s order by serial_no" % tdate
     data= clsSQL.getData(sql)
     data['business_name']= data['business_name'].map(deStrCode)
-    data['busi_date']= data['busi_date'].map(int)
+    data['busi_date']= data['busi_date'].map(myInt)
+    data['done_date']= data['done_date'].map(myInt)
     data['done_no']= data['done_no'].map(myStr)
     data['sec_code']= data['sec_code'].map(str.strip)
     data['contract_no']= data['contract_no'].map(str.strip)
     data['relative_code']= data['relative_code'].map(str.strip)
     data['busi_date']= tdate
-    data['mark']='unmarked'
     data.to_sql('TFDT', con= engine, if_exists= 'append', index= False)
     
 def syncData(clsSQL, localSQL, engine, intSDate= 0):
@@ -154,44 +155,19 @@ if __name__ == '__main__':
     db='data_ceneter_all'
     clsSQL= MSSQL(host,user,pwd,db)
     clsSQL.Connect()
-    localSQL= MSSQL('127.0.0.1', 'sa', '123', 'markedTF71')
+    localSQL= MSSQL(host,user,pwd, 'Wangprivate')
     localSQL.Connect()
     if not clsSQL.isConnect:
         print(clsSQL.host + ' not connect')
     elif not localSQL.isConnect:
         print(localSQL.host + ' not connect')
     else:
-        
-        engine = create_engine("mssql+pymssql://sa:123@127.0.0.1:1433/markedTF71")
-        #tdate= '20200707' #= pdDate.iloc[-1,0]
-        
-        #syncData(clsSQL, localSQL, engine)
-        
-        rebuildDT(localSQL, 'TFDT')
-        
+        engine = create_engine("mssql+pymssql://wanggp:Wanggp@0511@172.21.6.152:1433/Wangprivate")
+        #tdate= '20200707'
+        syncData(clsSQL, localSQL, engine)
+        #rebuildDT(localSQL, 'TFDT')
     print('All done, time elapsed: %.2f min' %  ((ti.time() - t0)/60))    
         
-    
-    """  
-lsdata=data[data['business_name']=='ETF赎回']
-    
-
-sql= "select  serial_no, busi_date, business_name, fund_chg, sec_code, sec_type, sec_chg, done_amt, contract_no,\
-            rpt_contract_no, done_no, done_date, relative_code from uv_tcl_his_fund_stock_chg_71 where done_no= '12273179' or rpt_contract_no='5900058069'"
-testdata= clsSQL.getData(sql)    
-testdata['business_name']= testdata['business_name'].map(deStrCode)    
-testdata['busi_date']= testdata['busi_date'].map(lambda x:str(x)[:8])    
-testdata['done_no']= testdata['done_no'].map(lambda x:str(int(x)))
-
-
-    myapi.cur.execute(sqlword)
-
-sql='select * from TFDT where busi_date= 20200716'
-data=localSQL.getData(sql)
-data.to_csv('data.csv')
-    
-    """
-    
     
     
       

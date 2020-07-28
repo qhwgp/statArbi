@@ -43,8 +43,8 @@ class MSSQL:
         self.cur.close()
         self.conn.close()
         
-    def getDate(self, startDate= 0):
-        sql="select distinct busi_date from TFDT where busi_date >= %d order by busi_date" % startDate
+    def getDate(self, datatable, startDate= 0):
+        sql="select distinct busi_date from %s where busi_date >= %d order by busi_date" % (datatable, startDate)
         data= pd.read_sql(sql, con=self.conn)
         return list(data['busi_date'])
         
@@ -55,7 +55,7 @@ class MSSQL:
         return data
     
     def getUnmarkedData(self,tDate):
-        sql= "select * from TFDT where busi_date<=%d and mark='unmarked'"% tDate
+        sql= "select * from SRDT where busi_date<=%d and mark='unmarked'"% tDate
         data= pd.read_sql(sql, con=self.conn)
         data['business_name']= data['business_name'].map(deStrCode)
         return data
@@ -66,7 +66,7 @@ class MSSQL:
     
     def addData(self, engine, data):
         if len(data)> 0:
-            data.to_sql('TFDT', con= engine, if_exists= 'append', index= False)
+            data.to_sql('SRDT', con= engine, if_exists= 'append', index= False)
 
     def updateMarkData(self, engine, data):
         try:
@@ -86,16 +86,16 @@ class MSSQL:
         contract_no    VARCHAR(30),
         rpt_contract_no    VARCHAR(30),
         done_no    VARCHAR(30),
-        done_date VARCHAR(30),
+        done_date int,
         relative_code VARCHAR(30),
         mark VARCHAR(30),
-        code_type VARCHAR(30),
-        PRIMARY KEY(serial_no,busi_date)
+        mark_date int,
+        PRIMARY KEY(serial_no,busi_date))
         )
         """
         self.cur.execute(sqlword)
         data.to_sql('tempDT', con= engine, if_exists= 'append', index= False)
-        sql="UPDATE TFDT SET mark=t.mark, code_type=t.code_type FROM (SELECT * from tempDT) AS t WHERE TFDT.serial_no=t.serial_no and TFDT.busi_date=t.busi_date"
+        sql="UPDATE SRDT SET mark=t.mark, mark_date=t.mark_date FROM (SELECT * from tempDT) AS t WHERE TFDT.serial_no=t.serial_no and TFDT.busi_date=t.busi_date"
         self.cur.execute(sql)
 
 def normETFCode(code):
@@ -404,17 +404,24 @@ def getMarkData(data, tdate):
     
 if __name__ == '__main__':
     t0 = ti.time()
-    localSQL= MSSQL('127.0.0.1', 'sa', '123', 'markedTF71')
+    host='172.21.6.152'
+    user='wanggp'
+    pwd='Wanggp@0511'
+    db='data_ceneter_all'
+    localSQL= MSSQL(host,user,pwd, 'Wangprivate')
     localSQL.Connect()
     if not localSQL.isConnect:
         print(localSQL.host + ' not connect')
     else:
-        engine = create_engine("mssql+pymssql://sa:123@127.0.0.1:1433/markedTF71")
-        listDate= localSQL.getDate()
+        engine = create_engine("mssql+pymssql://wanggp:Wanggp@0511@172.21.6.152:1433/Wangprivate")
+        listDate= localSQL.getDate('TFDT')
+        listMarkDate= localSQL.getDate('SRDT')
 
         for tdate in listDate:
             print('deal data date: %d'% tdate)
-            #tdate= listDate[16]
+            if True:#tdate in listLocalDate:
+                continue
+            #tdate= listDate[0]
             data= localSQL.getUnmarkedData(tdate)  
             data, apdata, undoData= getMarkData(data, tdate)
             lsdata= pd.concat([data, apdata], axis= 0)
@@ -423,6 +430,7 @@ if __name__ == '__main__':
             if len(lsdata)> 0:
                 codedata= data[(data['code_type']=='stock')&(data['sec_chg']!= 0)&(data['mark']== '159801')].groupby('sec_code')['sec_chg'].sum()
                 codedata= codedata[codedata.values!= 0]
+                
                 print('error date: %d'% tdate)
                 break
             
