@@ -164,7 +164,7 @@ class MSSQL:
                      sec_code='%s'  and done_no<>'0')) or
         (rpt_contract_no in (select rpt_contract_no from SRDT where busi_date=%d and 
                              business_name in ('ETF申购','ETF现金申购份额确认') and sec_code='%s')) or
-        (business_name in ('现金替代补款', '现金替代退款', '证券买入') and done_date=%d)
+        (business_name in ('现金替代补款', '现金替代退款') and done_date=%d)
         ) 
         order by sec_code, serial_no
         """%(scode, tdate, scode, tdate, scode, tdate)
@@ -179,11 +179,10 @@ class MSSQL:
         (done_no in (select done_no from SRDT where busi_date=%d and business_name='ETF赎回' and 
                      sec_code='%s'  and done_no<>'0')) or
         (rpt_contract_no in (select rpt_contract_no from SRDT where busi_date=%d and 
-                             business_name='ETF赎回' and sec_code='%s')) or
-        (business_name in ('现金替代补款','证券卖出') and done_date=%d)
-        ) 
+                             business_name='ETF赎回' and sec_code='%s'))
+        )
         order by sec_code, serial_no
-        """%(scode, tdate, scode, tdate, scode, tdate)
+        """%(scode, tdate, scode, tdate, scode)
         data= pd.read_sql(sqlword, con=self.conn)
         return data
     
@@ -305,11 +304,12 @@ def getMarkData(data, tdate):
                 while cRow<nLsData:
                     if sdata.iloc[cRow]['business_name']=='证券买入' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['mark']=='unmarked':
                         sdata.iloc[cRow,13]= sdata.iloc[iRow,12]
+                        sdata.iloc[cRow,9]= sdata.iloc[iRow,9]
                         sdata.iloc[iRow,13]= sdata.iloc[iRow,12]
                         break
                     else:
                         cRow+=1
-        data.loc[sdata.index, 'mark']= sdata['mark']
+        data.loc[sdata.index, ['rpt_contract_no', 'mark']]= sdata[['rpt_contract_no', 'mark']]
         sdata= data[(data['sec_code']== scode)&((data['business_name']== '证券卖出')|(data['business_name']== '申购赎回过入'))]
         nLsData= len(sdata)
         for iRow in range(nLsData):
@@ -319,18 +319,19 @@ def getMarkData(data, tdate):
                 while cRow<nLsData:
                     if sdata.iloc[cRow]['business_name']=='证券卖出' and sdata.iloc[cRow]['sec_chg']==qty and sdata.iloc[cRow]['mark']=='unmarked':
                         sdata.iloc[cRow,13]= sdata.iloc[iRow,12]
+                        sdata.iloc[cRow,9]= sdata.iloc[iRow,9]
                         sdata.iloc[iRow,13]= sdata.iloc[iRow,12]
                         break
                     else:
                         cRow+=1
-        data.loc[sdata.index, 'mark']= sdata['mark']
+        data.loc[sdata.index, ['rpt_contract_no', 'mark']]= sdata[['rpt_contract_no', 'mark']]
     undoData= data[data['mark']=='unmarked']
     nadp= 0
     nUndo= len(undoData)
     #sum matched data
     for i in range(nUndo):
         inde= undoData.index[i]
-        #inde= 31680
+        #inde= 18539
         if undoData.loc[inde, 'mark']!= 'unmarked':
             continue
         scode= undoData.loc[inde, 'sec_code']
@@ -348,19 +349,22 @@ def getMarkData(data, tdate):
                     #rcode= gdata.loc['申购赎回过出','sec_chg'].index[0]
                     lsdata= undoData[(undoData['sec_code']== scode)&(undoData['mark']== 'unmarked')&(undoData['business_name'].isin(['证券买入', '申购赎回过出']))]
                     outqty= gdata.loc[('申购赎回过出', rcode), 'sec_chg']
+                    rcn= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '申购赎回过出'))].iloc[0, 9]
                     if -outqty== qty:
                         sdata= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券买入'))]
                         undoData.loc[sdata.index, 'mark']= rcode
+                        undoData.loc[sdata.index, 'rpt_contract_no']= rcn
                     elif -outqty< qty:
                         sdata= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券买入'))]
                         undoData.loc[sdata.index, 'mark']= rcode
-                        #data.loc[sdata.index, 'mark']= rcode
+                        undoData.loc[sdata.index, 'rpt_contract_no']= rcn
                         apd= undoData.loc[inde]
                         nadp+= 1
                         seqno= str(tdate)+ str(nadp).zfill(4)
                         apd.name= seqno
                         apd.serial_no= seqno
-                        apd.rpt_contract_no= 'append'
+                        apd.rpt_contract_no= rcn
+                        apd.done_no= 'append'
                         apd.sec_chg= -qty- outqty
                         apd.fund_chg= -(qty+ outqty)/qty* gdata.loc[('证券买入', scode), 'fund_chg']
                         apd.done_amt= -(qty+ outqty)/qty* gdata.loc[('证券买入', scode), 'done_amt']
@@ -374,6 +378,7 @@ def getMarkData(data, tdate):
                         apd.fund_chg= -apd.fund_chg
                         apd.done_amt= -apd.done_amt
                         apd.mark= 'unmarked'
+                        apd.rpt_contract_no= ''
                         undoData= undoData.append(apd)
                         qty+= outqty
                     else:
@@ -385,20 +390,22 @@ def getMarkData(data, tdate):
                     #rcode= gdata.loc['申购赎回过入','sec_chg'].index[1]
                     lsdata= undoData[(undoData['sec_code']== scode)&(undoData['mark']== 'unmarked')&(undoData['business_name'].isin(['证券卖出', '申购赎回过入']))]
                     outqty= gdata.loc[('申购赎回过入', rcode), 'sec_chg']
+                    rcn= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '申购赎回过入'))].iloc[0, 9]
                     if outqty== -qty:
                         sdata= lsdata[(lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券卖出')]
                         undoData.loc[sdata.index, 'mark']= rcode
-                        #data.loc[sdata.index, 'mark']= rcode
+                        undoData.loc[sdata.index, 'rpt_contract_no']= rcn
                     elif outqty< -qty:
                         sdata= lsdata[((lsdata['relative_code']== rcode)|(lsdata['business_name']== '证券卖出'))]
                         undoData.loc[sdata.index, 'mark']= rcode
-                        #data.loc[sdata.index, 'mark']= rcode
+                        undoData.loc[sdata.index, 'rpt_contract_no']= rcn
                         apd= undoData.loc[inde]
                         nadp+= 1
                         seqno= str(tdate)+ str(nadp).zfill(4)
                         apd.name= seqno
                         apd.serial_no= seqno
-                        apd.rpt_contract_no= 'append'
+                        apd.rpt_contract_no= rcn
+                        apd.done_no= 'append'
                         apd.sec_chg= -qty- outqty
                         apd.fund_chg= -(qty+ outqty)/qty* gdata.loc[('证券卖出', scode), 'fund_chg']
                         apd.done_amt= -(qty+ outqty)/qty* gdata.loc[('证券卖出', scode), 'done_amt']
@@ -417,11 +424,11 @@ def getMarkData(data, tdate):
                         
                     else:
                         pass
-    data.loc[undoData.index[:nUndo], 'mark']= undoData['mark']
+    data.loc[undoData.index[:nUndo], ['rpt_contract_no', 'mark']]= undoData[['rpt_contract_no', 'mark']]
     data= pd.concat([data, undoData.iloc[nUndo:]], axis= 0)
     undoData= data[data['mark']=='unmarked']
     nUndo= len(undoData)
-    #wap2
+    #multi type sum match data
     for scode in undoData.groupby('sec_code')['mark'].count().index:
         #scode= '002049'
         lsdata= undoData[undoData['sec_code']== scode]
@@ -446,13 +453,15 @@ def getMarkData(data, tdate):
                 #inde= lsdata.index[0]
                 qty= lsdata.loc[inde, 'sec_chg']
                 rcode= lsdata.loc[inde, 'relative_code']
+                rcn= lsdata.loc[inde, 'rpt_contract_no']
                 if lsdata.loc[inde, 'business_name']== '申购赎回过出':
                     undoData.loc[inde, 'mark']= rcode
                     nadp+= 1
                     seqno= str(tdate)+ str(nadp).zfill(4)
                     apd.name= seqno
                     apd.serial_no= seqno
-                    apd.rpt_contract_no= 'append'
+                    apd.rpt_contract_no= rcn
+                    apd.done_no= 'append'
                     apd.business_name= '证券买入'
                     apd.sec_chg= -qty
                     apd.fund_chg= qty* unitamt
@@ -465,7 +474,8 @@ def getMarkData(data, tdate):
                     seqno= str(tdate)+ str(nadp).zfill(4)
                     apd.name= seqno
                     apd.serial_no= seqno
-                    apd.rpt_contract_no= 'append'
+                    apd.rpt_contract_no= rcn
+                    apd.done_no= 'append'
                     apd.business_name= '证券卖出'
                     apd.sec_chg= -qty
                     apd.fund_chg= qty* unitamt
@@ -483,11 +493,13 @@ def getMarkData(data, tdate):
             for inde in lsdata.index:
                 qty= lsdata.loc[inde, 'sec_chg']
                 rcode= lsdata.loc[inde, 'relative_code']
+                rcn= lsdata.loc[inde, 'rpt_contract_no']
+                #wap
                 nadp+= 1
                 seqno= str(tdate)+ str(nadp).zfill(4)
                 apd.name= seqno
                 apd.serial_no= seqno
-                apd.rpt_contract_no= 'append'
+                apd.done_no= 'append'
                 apd.sec_chg= -qty
                 apd.fund_chg= qty* unitamt
                 if lsdata.loc[inde, 'business_name']== '申购赎回过出':
@@ -495,11 +507,13 @@ def getMarkData(data, tdate):
                     apd.business_name= '证券买入'
                     apd.done_amt= -qty* unitamt
                     apd.mark= rcode
+                    apd.rpt_contract_no= rcn
                 elif lsdata.loc[inde, 'business_name']== '申购赎回过入':
                     undoData.loc[inde, 'mark']= rcode
                     apd.business_name= '证券卖出'
                     apd.done_amt= qty* unitamt
                     apd.mark= rcode
+                    apd.rpt_contract_no= rcn
                 elif lsdata.loc[inde, 'business_name']== '证券买入':
                     undoData.loc[inde, 'mark']= 'trade'
                     apd.business_name= '证券卖出'
@@ -514,11 +528,12 @@ def getMarkData(data, tdate):
             for inde in lsdata.index:
                 qty= lsdata.loc[inde, 'sec_chg']
                 rcode= lsdata.loc[inde, 'relative_code']
+                rcn= lsdata.loc[inde, 'rpt_contract_no']
                 nadp+= 1
                 seqno= str(tdate)+ str(nadp).zfill(4)
                 apd.name= seqno
                 apd.serial_no= seqno
-                apd.rpt_contract_no= 'append'
+                apd.done_no= 'append'
                 apd.sec_chg= -qty
                 apd.fund_chg= qty* unitamt
                 if lsdata.loc[inde, 'business_name']== '申购赎回过出':
@@ -526,18 +541,20 @@ def getMarkData(data, tdate):
                     apd.business_name= '证券买入'
                     apd.done_amt= -qty* unitamt
                     apd.mark= rcode
+                    apd.rpt_contract_no= rcn
                 elif lsdata.loc[inde, 'business_name']== '申购赎回过入':
                     undoData.loc[inde, 'mark']= rcode
                     apd.business_name= '证券卖出'
                     apd.done_amt= qty* unitamt
                     apd.mark= rcode
+                    apd.rpt_contract_no= rcn
                 elif lsdata.loc[inde, 'business_name']== '证券卖出':
                     undoData.loc[inde, 'mark']= 'trade'
                     apd.business_name= '证券买入'
                     apd.done_amt= qty* unitamt
                     apd.mark= 'trade'
                 undoData= undoData.append(apd)
-    data.loc[undoData.index[:nUndo], 'mark']= undoData['mark']
+    data.loc[undoData.index[:nUndo], ['rpt_contract_no', 'mark']]= undoData[['rpt_contract_no', 'mark']]
     data= pd.concat([data, undoData.iloc[nUndo:]], axis= 0)
     data.loc[data[data['mark']!='unmarked'].index, 'mark_date']= tdate
     return data
