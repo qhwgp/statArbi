@@ -8,6 +8,7 @@ import myjqcfg as cfg
 import time as ti
 import pandas as pd
 from os import path
+from datetime import timedelta
 
 def syncTickData(jqID, sdate):
     strSDate= sdate.strftime("%Y%m%d")

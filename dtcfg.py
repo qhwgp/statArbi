@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 import time as ti
 import pandas as pd
 import warnings
+from datetime import date, datetime, timedelta
 warnings.filterwarnings('ignore')
 
 host='172.21.6.152'
@@ -16,6 +17,19 @@ user='wanggp'
 pwd='Wanggp@0511'
 dcadb='data_ceneter_all'
 lcdb='Wangprivate'
+
+jqUser= '18665883365'
+jqPwd= 'Hu12345678'
+listIndex= ['000016.XSHG', '000300.XSHG', '000905.XSHG', '000986.XSHG', '000987.XSHG', '000988.XSHG', '000989.XSHG',
+       '000990.XSHG', '000991.XSHG', '000992.XSHG', '000993.XSHG', '000994.XSHG', '000995.XSHG']
+
+def getStrToday(tback= 0):
+    return (date.today()-timedelta(days= tback)).strftime("%Y%m%d")
+
+def getStrNextDay(strDate):
+    dt= datetime.strptime(strDate,'%Y%m%d')
+    dt= dt+ timedelta(days=1)
+    return dt.strftime("%Y%m%d")
 
 def timeStart():
     return ti.time()
@@ -145,6 +159,35 @@ class MSSQL:
         self.cur.execute(sqlword)
         data.to_sql('tempDT', con= self.engine, if_exists= 'append', index= False)
         sql="UPDATE SRDT SET mark=t.mark, mark_date=t.mark_date FROM (SELECT * from tempDT) AS t WHERE SRDT.serial_no=t.serial_no and SRDT.busi_date=t.busi_date"
+        self.cur.execute(sql)
+        
+    def updateRCNData(self, data):
+        try:
+            self.cur.execute('drop table tempDT')
+        except:
+            pass
+        sqlword = """
+        CREATE TABLE  tempDT (
+        serial_no VARCHAR(30) NOT NULL,
+        busi_date int,
+        business_name  VARCHAR(30),
+        fund_chg     float,
+        sec_code  VARCHAR(30),
+        sec_type   VARCHAR(30),
+        sec_chg float,
+        done_amt    float,
+        contract_no    VARCHAR(30),
+        rpt_contract_no    VARCHAR(30),
+        done_no    VARCHAR(30),
+        done_date int,
+        relative_code VARCHAR(30),
+        mark VARCHAR(30),
+        mark_date int,
+        PRIMARY KEY(serial_no,busi_date))
+        """
+        self.cur.execute(sqlword)
+        data.to_sql('tempDT', con= self.engine, if_exists= 'append', index= False)
+        sql="UPDATE SRDT SET rpt_contract_no=t.rpt_contract_no FROM (SELECT * from tempDT) AS t WHERE SRDT.serial_no=t.serial_no and SRDT.busi_date=t.busi_date"
         self.cur.execute(sql)
         
     def updateMarkData(self, data, tdate):
@@ -558,6 +601,20 @@ def getMarkData(data, tdate):
     data= pd.concat([data, undoData.iloc[nUndo:]], axis= 0)
     data.loc[data[data['mark']!='unmarked'].index, 'mark_date']= tdate
     return data
+
+def updateRCNPatch(localSQL):
+    sqlword= "select * from SRDT where business_name in ('现金替代退款','现金替代补款') and len(rpt_contract_no)<2 and len(done_no)<2 and done_date>20200621"
+    data= localSQL.getData(sqlword)
+    data['business_name']= data['business_name'].map(deStrCode)
+    gdata= data.groupby(['done_date', 'relative_code', 'mark'])['rpt_contract_no'].count()
+    for inde in gdata.index:
+        lsdata= data[(data['done_date']== inde[0])&(data['relative_code']== inde[1])&(data['mark']== inde[2])]
+        sqlword= "select * from SRDT where done_date= %s and sec_code= '%s' and\
+            mark='%s' and business_name in ('现金替代划出','申购赎回过出') and sec_chg=0"%inde
+        rcndata= localSQL.getData(sqlword)
+        for i in range(min(len(lsdata), len(rcndata))):
+            data.loc[lsdata.index[i], 'rpt_contract_no']= rcndata.iloc[i, 9]
+    localSQL.updateRCNData(data)
 
 def checkMarkData(data):
     lsdata= data[(data['sec_type']=='stock')&(data['sec_chg']!= 0)].groupby('mark')['sec_chg'].sum()

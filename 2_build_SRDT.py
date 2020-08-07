@@ -26,6 +26,7 @@ if __name__ == '__main__':
             if not cfg.checkMarkData(data):
                 break
             localSQL.updateMarkData(data, tdate)
+        cfg.updateRCNPatch(localSQL)
     cfg.timeEnd(t0)
     
     #unmarkdata= localSQL.getUnmarkedData(99999999)
