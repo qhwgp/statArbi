@@ -17,17 +17,21 @@ if __name__ == '__main__':
     jq.auth(cfg.jqUser, cfg.jqPwd)
     jq.get_query_count()
     localSQL= cfg.MSSQL(cfg.host, cfg.user, cfg.pwd, cfg.lcdb)
-    localSQL.Connect()
+    #localSQL.Connect()
     if not localSQL.isConnect:
         print(localSQL.host + ' not connect')
     else:
-        sdate= '20200807'
+        sdate= '20200806'
         jqID= cfg.listIndex[0]
         tickPdData= jq.get_ticks(jqID, start_dt= sdate, end_dt= cfg.getStrNextDay(sdate), count= None)
         data= tickPdData.drop(['high', 'low', 'volume'], axis= 1)
         data['amntw']= data['money'].diff()/ 10000
         data['amntw']= data['amntw'].round(2)
         data= data.iloc[1:]
-        data.drop([])
-    
-    
+        data= data.drop(['money'], axis= 1)
+        data['tdate']= int(sdate)
+        data['icode']= jqID[:6]
+        data=data[['icode', 'tdate', 'time', 'current', 'amntw']]
+        
+        
+        

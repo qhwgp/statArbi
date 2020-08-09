@@ -27,9 +27,13 @@ indexTickDT= 'jqIndexTickData'
 jqUser= '18665883365'
 jqPwd= 'Hu12345678'
 
-jqDataPath= 'F:\\LenovoSync\\jqData'
-#jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
+#jqDataPath= 'F:\\LenovoSync\\jqData'
+jqDataPath= 'C:\\Users\\WAP\\Documents\\wap\\jqData'
 #jqDataPath= "H:\jqData"
+listJQID= ['000016.XSHG', '000300.XSHG', '000905.XSHG', '000986.XSHG', '000987.XSHG', '000988.XSHG', '000989.XSHG',
+       '000990.XSHG', '000991.XSHG', '000992.XSHG', '000993.XSHG', '000994.XSHG', '000995.XSHG']
+
+listY= ['000016.XSHG', '000300.XSHG', '000905.XSHG']
 
 #trade params
 tradeParam= {'jqETFID': '510300.XSHG',
@@ -64,7 +68,7 @@ def getTickData(jqID, sdate):
     if not path.exists(filePath):
         return None
     else:
-        tickPdData= pd.read_csv(filePath, index_col= 0)
+        tickPdData= pd.read_csv(filePath, index_col= 0, parse_dates=['time'])
     return tickPdData
 
 def getTradeDays():
