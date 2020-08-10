@@ -21,5 +21,5 @@ if __name__ == '__main__':
         print(localSQL.host + ' not connect')
     else:
         cfg.syncData(clsSQL, localSQL)
-        #rebuildDT(localSQL, 'TFDT')
+        #cfg.rebuildDT(localSQL, 'TFDT')
     cfg.timeEnd(t0)
