@@ -6,11 +6,11 @@ Created on Fri Aug  7 17:10:46 2020
 """
 
 import jqdatasdk as jq
-import dtcfg as cfg
+import rnncfg as cfg
 import time as ti
 import pandas as pd
-from os import path
-from datetime import timedelta
+#from os import path
+#from datetime import timedelta
 listJQID= ['000016.XSHG', '000300.XSHG', '000905.XSHG', '000986.XSHG', '000987.XSHG', '000988.XSHG', '000989.XSHG',
        '000990.XSHG', '000991.XSHG', '000992.XSHG', '000993.XSHG', '000994.XSHG', '000995.XSHG']
 
@@ -36,25 +36,27 @@ if __name__ == '__main__':
     if not localSQL.isConnect:
         print(localSQL.host + ' not connect')
     else:
-        sdate= '20200806'
-        jqID= listJQID[0]
+        #sdate= '20200806'
+        #jqID= listJQID[0]
         
         edate= cfg.getStrToday()
         listDate= syncListTradeDay('20190101', edate)
         for sdate in listDate:
             print('deal date: '+ sdate)
             for jqID in listJQID:
-                data= jq.get_ticks(jqID, start_dt= sdate, end_dt= cfg.getStrNextDay(sdate), count= None)
-                data['tickret']= (data['current']-data['current'].shift(1))/data['current'].shift(1)*10000
-                data['amntw']= data['money'].diff()/ 10000
-                data[['tickret', 'amntw']]= data[['tickret', 'amntw']].round(2)
-                data= data.iloc[10:-10]
-                data= data.drop(['current', 'high', 'low', 'volume', 'money'], axis= 1)
-                data.columns= ['mtime', 'tickret', 'amntw']
-                #data['mtime']= data['mtime'].map(stimeToStr)
-                data['jqID']= jqID
-                data['tdate']= int(sdate)
-                data.to_sql('jqIndexDataDT', con= localSQL.engine, if_exists= 'append', index= False)
+                if len(localSQL.getDateData(jqID, int(sdate)))<10:
+                    #if len(localSQL.getDateData(jqID, int(sdate)))== 0:
+                    data= jq.get_ticks(jqID, start_dt= sdate, end_dt= cfg.getStrNextDay(sdate), count= None)
+                    data['amntw']= data['money'].diff()/ 10000
+                    data= data.iloc[10:-10]
+                    data= data.drop(['high', 'low', 'volume', 'money'], axis= 1)
+                    data.columns= ['mtime', 'mlast', 'amntw']
+                    data['jqID']= jqID
+                    data['tdate']= int(sdate)
+                    if len(data)<10:
+                        print('error data, date: %s, code: %s'% (sdate, jqID))
+                    else:
+                        data.to_sql('jqIndexDataDT', con= localSQL.engine, if_exists= 'append', index= False)
         
         cfg.timeEnd(t0)
         """
